@@ -1,0 +1,24 @@
+{
+  "entities": {
+    "Quiz": {
+      "title": "Quiz",
+      "description": "A collection of questions for a game",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "questions": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "creatorId", "questions", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/quizzes/{quizId}": {
+      "schema": "Quiz",
+      "description": "Public and private quizzes"
+    }
+  }
+}

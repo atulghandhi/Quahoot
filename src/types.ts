@@ -11,6 +11,10 @@ export interface Question {
   options: string[];
   correctIndex: number;
   timeLimit: number;
+  image?: string;
+  audioUrl?: string;
+  youtubeUrl?: string;
+  youtubeStartAt?: number;
 }
 
 export interface Player {
@@ -24,10 +28,11 @@ export interface Player {
 
 export interface GameState {
   code: string;
-  status: 'lobby' | 'countdown' | 'question_active' | 'leaderboard' | 'podium' | 'ended';
+  status: 'lobby' | 'countdown' | 'question_active' | 'question_result' | 'leaderboard' | 'podium' | 'ended';
   hostId: string;
   players: Record<string, Player>;
   questions: Question[];
   currentQuestionIndex: number;
   questionStartTime: number | null;
+  answerDistribution: number[];
 }

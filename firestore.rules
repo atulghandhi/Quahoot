@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(existingData) {
+      return isSignedIn() && existingData.creatorId == request.auth.uid;
+    }
+
+    function isValidQuiz(data) {
+      return data.id is string && 
+             data.title is string && data.title.size() <= 100 &&
+             data.creatorId is string &&
+             data.questions is list &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    match /quizzes/{quizId} {
+      allow read: if true; // Public access to play
+      allow create: if isSignedIn() && 
+                      request.resource.data.creatorId == request.auth.uid &&
+                      isValidQuiz(request.resource.data) &&
+                      request.resource.data.createdAt == request.time &&
+                      request.resource.data.updatedAt == request.time;
+      allow update: if isOwner(resource.data) && 
+                      isValidQuiz(request.resource.data) &&
+                      request.resource.data.updatedAt == request.time &&
+                      request.resource.data.creatorId == resource.data.creatorId &&
+                      request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isOwner(resource.data);
+    }
+  }
+}

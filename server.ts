@@ -11,7 +11,10 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const server = createServer(app);
-  const io = new Server(server, { cors: { origin: '*' } });
+  const io = new Server(server, { 
+    cors: { origin: '*' },
+    maxHttpBufferSize: 1e7 // 10MB
+  });
   const PORT = 3000;
 
   // Real-time Game State
@@ -33,6 +36,7 @@ async function startServer() {
         questions,
         currentQuestionIndex: 0,
         questionStartTime: null,
+        answerDistribution: [],
       });
       socket.join(`game-${code}`);
       socket.join(`host-${code}`);
@@ -50,6 +54,9 @@ async function startServer() {
         game.players[pId].lastAnswerCorrect = false;
         game.players[pId].lastScoreAdded = 0;
       }
+
+      const currentQ = game.questions[game.currentQuestionIndex];
+      game.answerDistribution = new Array(currentQ.options.length).fill(0);
 
       io.to(`game-${code}`).emit('game_state', game);
       
@@ -79,6 +86,11 @@ async function startServer() {
         game.players[pId].lastScoreAdded = 0;
       }
 
+      const nextQ = game.questions[game.currentQuestionIndex];
+      if (nextQ) {
+        game.answerDistribution = new Array(nextQ.options.length).fill(0);
+      }
+
       if (game.currentQuestionIndex >= game.questions.length) {
         game.status = 'podium';
         io.to(`game-${code}`).emit('game_state', game);
@@ -98,6 +110,13 @@ async function startServer() {
           }
         }, 1000);
       }
+    });
+
+    socket.on('show_results', ({ code }) => {
+      const game = games.get(code);
+      if (!game || game.hostId !== socket.id) return;
+      game.status = 'question_result';
+      io.to(`game-${code}`).emit('game_state', game);
     });
 
     socket.on('show_leaderboard', ({ code }) => {
@@ -154,22 +173,44 @@ async function startServer() {
       game.players[playerId].lastScoreAdded = points;
       game.players[playerId].score += points;
       
+      // Track distribution
+      if (typeof answerIndex === 'number' && game.answerDistribution[answerIndex] !== undefined) {
+        game.answerDistribution[answerIndex]++;
+      }
+      
       socket.emit('answer_result', { correct, points });
+
+      // Check if everyone has answered
+      const playersList = Object.values(game.players);
+      const allAnswered = playersList.length > 0 && playersList.every((p: any) => p.hasAnswered);
+      if (allAnswered) {
+        game.status = 'question_result';
+      }
+      
       io.to(`game-${code}`).emit('game_state', game);
     });
 
     socket.on('disconnect', () => {
       // Basic cleanup (in real-world would be more robust)
-      for (const [code, game] of games.entries()) {
+      Array.from(games.entries()).forEach(([code, game]) => {
         if (game.hostId === socket.id) {
           game.status = 'ended';
           io.to(`game-${code}`).emit('game_state', game);
           games.delete(code);
         } else if (game.players[socket.id]) {
           delete game.players[socket.id];
+          
+          // If we're in a question, check if everyone else has answered
+          if (game.status === 'question_active') {
+            const playersList = Object.values(game.players);
+            if (playersList.length > 0 && playersList.every((p: any) => p.hasAnswered)) {
+              game.status = 'question_result';
+            }
+          }
+          
           io.to(`game-${code}`).emit('game_state', game);
         }
-      }
+      });
     });
   });
 
